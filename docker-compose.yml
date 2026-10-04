@@ -1,0 +1,53 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: axogen
+      POSTGRES_USER: axogen
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-axogen}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U axogen -d axogen"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+  app:
+    build: .
+    ports:
+      - "${APP_PORT:-3000}:3000"
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://axogen:${POSTGRES_PASSWORD:-axogen}@postgres:5432/axogen
+      ASSET_DIR: /app/public/uploads
+      EXPORT_DIR: /app/generated-sites
+    volumes:
+      - assets:/app/public/uploads
+      - exports:/app/generated-sites
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+  worker:
+    build: .
+    command: ["./node_modules/.bin/tsx", "scripts/worker.ts"]
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://axogen:${POSTGRES_PASSWORD:-axogen}@postgres:5432/axogen
+      ASSET_DIR: /app/public/uploads
+    volumes:
+      - assets:/app/public/uploads
+    depends_on:
+      app:
+        condition: service_healthy
+    restart: unless-stopped
+volumes:
+  postgres_data:
+  assets:
+  exports:

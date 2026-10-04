@@ -1,0 +1,2 @@
+import {db} from '@/lib/db';
+export async function track(projectId:string,provider:string,operation:string,inputTokens=0,outputTokens=0) {const estimatedUsd=provider==='openai-text'?(inputTokens*Number(process.env.TEXT_INPUT_USD_PER_MILLION||0)+outputTokens*Number(process.env.TEXT_OUTPUT_USD_PER_MILLION||0))/1e6:provider==='gpt-image-2'?Number(process.env.IMAGE_USD_PER_GENERATION||0):0;await db.apiUsage.create({data:{projectId,provider,operation,inputTokens,outputTokens,estimatedUsd}});}

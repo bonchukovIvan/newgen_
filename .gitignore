@@ -1,0 +1,10 @@
+node_modules/
+.next/
+.env
+.env.*.local
+generated-sites/*
+!generated-sites/.gitkeep
+public/uploads/
+playwright-report/
+test-results/
+*.tsbuildinfo

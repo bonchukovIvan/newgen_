@@ -1,0 +1,1 @@
+export default function NotFound(){return <main className="guide"><h1>This page isn’t here.</h1><p>The link may have changed, or this project may belong to another workspace.</p><a className="button primary" href="/">Back to workspace</a></main>;}

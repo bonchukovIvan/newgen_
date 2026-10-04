@@ -1,0 +1,1 @@
+export const stages=['Reading business brief','Checking business information','Planning website strategy','Building sitemap','Creating design system','Composing pages','Writing page copy','Preparing image directions','Creating image library','Writing search metadata','Preparing structured data','Validating website','Saving website','Ready to preview'];

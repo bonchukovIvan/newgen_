@@ -1,0 +1,54 @@
+{
+  "name": "axogen",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --hostname 0.0.0.0",
+    "build": "prisma generate && next build --webpack",
+    "start": "next start --hostname 0.0.0.0",
+    "worker": "node --env-file-if-exists=.env --import tsx scripts/worker.ts",
+    "seed": "node --env-file-if-exists=.env --import tsx prisma/seed.ts",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "format": "prettier --write .",
+    "postinstall": "prisma generate",
+    "test:integration": "RUN_INTEGRATION=true vitest run"
+  },
+  "dependencies": {
+    "next": "latest",
+    "react": "latest",
+    "react-dom": "latest",
+    "@prisma/client": "^6.19.0",
+    "better-auth": "latest",
+    "openai": "latest",
+    "zod": "^4.0.0",
+    "react-hook-form": "latest",
+    "@hookform/resolvers": "latest",
+    "lucide-react": "latest",
+    "jszip": "latest",
+    "sharp": "latest",
+    "clsx": "latest",
+    "tailwind-merge": "latest",
+    "@radix-ui/react-slot": "latest"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.0",
+    "@types/node": "^22.0.0",
+    "@types/react": "latest",
+    "@types/react-dom": "latest",
+    "prisma": "^6.19.0",
+    "tsx": "latest",
+    "vitest": "latest",
+    "@playwright/test": "latest",
+    "eslint": "^9.0.0",
+    "eslint-config-next": "latest",
+    "prettier": "latest",
+    "tailwindcss": "^4.0.0",
+    "@tailwindcss/postcss": "^4.0.0"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  }
+}
