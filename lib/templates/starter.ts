@@ -2,6 +2,7 @@ import {Brief,Site,Section,briefSchema,effectivePageCount} from '@/lib/validatio
 import {SectionType,variantFor} from '@/lib/templates/registry';
 import {createTheme} from '@/lib/templates/themes';
 import {businessFromBrief} from '@/lib/generation/facts';
+import {buildRequiredPages} from '@/lib/generation/required-pages';
 export const demoBrief=briefSchema.parse({name:'NovaForge Esports',category:'Gaming lounge',city:'Manchester',country:'United Kingdom',services:['PC Gaming','Console Gaming','Esports Events','Private Events','Coaching'],style:'Gaming',dark:true,tone:'bold',primary:'#a38aff',pageCount:6,imageStrategy:'mixed',description:'A place for Manchester players to get together, find their next game, and enjoy playing in person.'});
 export function newSection(type:SectionType,index=0):Section {return {id:crypto.randomUUID(),type,variant:variantFor(type,index),eyebrow:'',title:type==='cta'?'Let’s talk about what you need':type.charAt(0).toUpperCase()+type.slice(1),body:'',cta:'Get in touch',href:'/contact',imageId:'',imageIntent:'',items:[]};}
 function section(type:SectionType,title:string,body:string,seed:number):Section {return {...newSection(type,seed),title,body};}
@@ -32,5 +33,5 @@ export function starterSite(b:Brief,seed=0):Site {
   if(count===1)sections.push(contact);
   return {id:crypto.randomUUID(),slug,title:name,objective:`Help visitors understand ${name.toLowerCase()} and contact the business`,seo:{title:`${name==='Home'?b.category:name} in ${b.city} | ${b.name}`.slice(0,160),description:`Explore ${name==='Home'?b.services.join(', '):name.toLowerCase()} at ${b.name} in ${b.city}. Get in touch to discuss your needs.`.slice(0,320),ogTitle:`${b.name} · ${name}`,ogDescription:(b.description||`${b.category} in ${b.city}`).slice(0,320)},sections};
  });
- return {schemaVersion:1,language:b.language,business,theme:createTheme(b.style,b.dark,b.primary),navigation:gaming?'split':'inline',footer:'columns',pages,assets:[],domain:'',warnings:[]};
+ return {schemaVersion:1,language:b.language,business,theme:createTheme(b.style,b.dark,b.primary),navigation:gaming?'split':'inline',footer:'columns',pages:[...pages,...buildRequiredPages(b)],assets:[],domain:'',warnings:['Privacy, GDPR, and cookie pages are drafts. Confirm legal details and contact information before publishing.']};
 }

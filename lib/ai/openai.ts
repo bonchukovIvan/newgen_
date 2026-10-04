@@ -10,6 +10,7 @@ import {sectionRegistry,SectionType,resolveVariant} from '@/lib/templates/regist
 import {newSection} from '@/lib/templates/starter';
 import {briefForPublication,checkGeneratedCopy} from '@/lib/generation/facts';
 import {createTheme,ensureContrast,readable} from '@/lib/templates/themes';
+import {isRequiredPageSlug} from '@/lib/generation/required-pages';
 export interface AIProvider {generatePage(site:Site,page:SitePage,brief:Brief,force?:boolean):Promise<SitePage>;generateSection(site:Site,section:Section,brief:Brief,force?:boolean):Promise<Section>;}
 export class OpenAIProvider implements AIProvider {
  constructor(private projectId:string){}
@@ -37,26 +38,41 @@ export class OpenAIProvider implements AIProvider {
  }
  async planWebsite(site:Site,brief:Brief,force=false) {
   if(isMock())return site;
+  const businessPages=site.pages.filter(page=>!isRequiredPageSlug(page.slug));
+  const requiredPages=site.pages.filter(page=>isRequiredPageSlug(page.slug));
   const allowed=Object.keys(sectionRegistry).filter(id=>!['navigation','footer'].includes(sectionRegistry[id].type));
   const schema=z.object({strategy:z.string().max(1000),pages:z.array(z.object({title:z.string().max(100),slug:z.string(),objective:z.string().max(400),variants:z.array(z.enum(allowed as [string,...string[]])).min(1).max(15)})).min(1).max(20)});
   const validate=(plan:z.infer<typeof schema>)=>{
-   if(plan.pages.length!==site.pages.length||plan.pages[0].slug!=='/'||new Set(plan.pages.map(p=>p.slug)).size!==plan.pages.length||plan.pages.some(p=>!/^\/(?:[a-z0-9-]+(?:\/[a-z0-9-]+)*)?$/.test(p.slug)))throw new Error('Return the requested number of unique valid page routes, beginning with /.');
+   if(plan.pages.length!==businessPages.length||plan.pages[0].slug!=='/'||new Set(plan.pages.map(p=>p.slug)).size!==plan.pages.length||plan.pages.some(p=>isRequiredPageSlug(p.slug)||!/^\/(?:[a-z0-9-]+(?:\/[a-z0-9-]+)*)?$/.test(p.slug)))throw new Error('Return the requested number of unique valid business page routes, beginning with / and excluding the required pages.');
    if(plan.pages.length>1&&!plan.pages.some(p=>p.slug==='/contact'))throw new Error('Multi-page sites require a /contact page.');
    if(plan.pages.length===1&&!plan.pages[0].variants.some(v=>v.startsWith('contact-')))throw new Error('Landing pages need a contact section.');
-   for(const page of plan.pages)for(const variant of page.variants){const type=resolveVariant(variant).type;if(['testimonials','pricing','team','trustStats','logos'].includes(type)&&!site.pages.some(p=>p.sections.some(s=>s.type===type)))throw new Error(`No supplied evidence is available for ${type}. Omit it.`);}
+   for(const page of plan.pages)for(const variant of page.variants){const type=resolveVariant(variant).type;if(['testimonials','pricing','team','trustStats','logos'].includes(type)&&!businessPages.some(p=>p.sections.some(s=>s.type===type)))throw new Error(`No supplied evidence is available for ${type}. Omit it.`);}
   };
-  const plan=await this.structured(schema,prompts.planner,{brief:briefForPublication(brief),facts:site.business,requestedPageCount:site.pages.length,approvedComponents:allowed,requirements:'Include a contact form and preserve a /contact route for multiple pages. Select diverse compatible layouts. Do not add evidence-only sections without supplied facts.',sitemap:site.pages.map(p=>({title:p.title,slug:p.slug,objective:p.objective,variants:p.sections.map(s=>s.variant)}))},force,validate);
-  const templates=site.pages.flatMap(p=>p.sections),slugs=new Set(plan.pages.map(p=>p.slug));
+  const plan=await this.structured(schema,prompts.planner,{brief:briefForPublication(brief),facts:site.business,requestedPageCount:businessPages.length,approvedComponents:allowed,requirements:'Include a contact form and preserve a /contact route for multiple pages. Select diverse compatible layouts. Do not add evidence-only sections without supplied facts. Privacy Policy, GDPR Policy, Cookie Policy and Business Model are added separately; do not plan them.',sitemap:businessPages.map(p=>({title:p.title,slug:p.slug,objective:p.objective,variants:p.sections.map(s=>s.variant)}))},force,validate);
+  const templates=businessPages.flatMap(p=>p.sections),slugs=new Set([...plan.pages.map(p=>p.slug),...requiredPages.map(p=>p.slug)]);
   const result={...site,pages:plan.pages.map((p,i)=>{
-   const original=site.pages.find(x=>x.slug===p.slug)||site.pages[i];
+   const original=businessPages.find(x=>x.slug===p.slug)||businessPages[i];
    const sections=p.variants.map(variant=>{const type=resolveVariant(variant).type as SectionType;const template=original.sections.find(s=>s.type===type)||templates.find(s=>s.type===type)||newSection(type);return {...structuredClone(template),id:crypto.randomUUID(),type,variant};});
    if(p.slug==='/contact'&&!sections.some(s=>s.type==='contact'))sections.push({...newSection('contact'),title:'Get in touch'});
    return {...original,id:original.id,slug:p.slug,title:p.title,objective:p.objective,sections};
-  })};
-  for(const page of result.pages)for(const section of page.sections){for(const item of [section,...section.items])if(item.href.startsWith('/')&&!slugs.has(item.href))item.href=result.pages.length===1?'#contact':'/contact';}
+  }).concat(requiredPages)};
+  for(const page of result.pages)for(const section of page.sections){for(const item of [section,...section.items])if(item.href.startsWith('/')&&!slugs.has(item.href))item.href=businessPages.length===1?'#contact':'/contact';}
   return result;
  }
+ async generateRequiredPage(site:Site,page:SitePage,brief:Brief,force=false):Promise<SitePage> {
+  if(isMock())return page;
+  const original=page.sections[0];
+  const schema=z.object({intro:z.string().max(1000),items:z.array(z.object({title:z.string().min(1).max(300),text:z.string().min(1).max(3000)})).min(original.items.length).max(original.items.length),seo:seoSchema});
+  const draft=await this.structured(schema,prompts.requiredPage,{page:{title:page.title,slug:page.slug,topics:original.items.map(item=>({title:item.title,text:item.text}))},business:{name:site.business.name,category:site.business.category,city:site.business.city,country:site.business.country},brief:{language:brief.language,services:brief.services,description:brief.description},verifiedWebsiteBehavior:{contactFormFields:['name','email','optional phone','message'],submissionStorage:'Preview submissions are stored in the Axogen workspace database; exported site submissions are stored in its SQLite database.',optionalWebhook:'A configured webhook can receive submissions.',defaultExportCookies:'The included exported site server does not set cookies.',defaultExportTracking:'No analytics or advertising scripts are included by default.'}},force,value=>{
+   if(value.items.length!==original.items.length)throw new Error('Preserve every required policy topic');
+   const check={...original,body:value.intro,items:value.items.map(item=>({...item,image:'',href:'',factRef:''}))};checkGeneratedCopy(check,site.business);
+  });
+  const section={...original,body:[original.body,draft.intro].filter(Boolean).join('\n\n'),items:draft.items.map(item=>({...item,image:'',href:'',factRef:''}))};
+  checkGeneratedCopy(section,site.business);
+  return {...page,seo:draft.seo,sections:[section]};
+ }
  async generatePage(site:Site,page:SitePage,brief:Brief,force=false):Promise<SitePage> {
+  if(isRequiredPageSlug(page.slug))return this.generateRequiredPage(site,page,brief,force);
   if(isMock())return page;
   const candidate=await this.structured(pageSchema,prompts.writer,{business:site.business,brief:briefForPublication(brief),page,sitemap:site.pages.map(p=>p.slug)},force,candidate=>{if(candidate.sections.length!==page.sections.length)throw new Error('Preserve the section count');candidate.sections.forEach(s=>checkGeneratedCopy(s,site.business));});
   if(candidate.sections.length!==page.sections.length)throw new Error('Writer changed the section structure');
@@ -64,6 +80,8 @@ export class OpenAIProvider implements AIProvider {
   result.sections.forEach(s=>checkGeneratedCopy(s,site.business));return result;
  }
  async generateSection(site:Site,section:Section,brief:Brief,force=false):Promise<Section> {
+  const requiredPage=site.pages.find(page=>isRequiredPageSlug(page.slug)&&page.sections.some(s=>s.id===section.id));
+  if(requiredPage)return (await this.generateRequiredPage(site,requiredPage,brief,force)).sections.find(s=>s.id===section.id)!;
   if(isMock())return {...section,title:section.title.endsWith(' — made for you')?section.title.replace(' — made for you',''):section.title+' — made for you',body:section.body+' Tell us what you have in mind.'};
   const publicBrief=briefForPublication(brief);
   const candidate=await this.structured(sectionSchema,prompts.section,{business:site.business,brief:publicBrief,section,sitemap:site.pages.map(p=>p.slug)},force,s=>checkGeneratedCopy(s,site.business));
@@ -71,7 +89,7 @@ export class OpenAIProvider implements AIProvider {
  }
  async generateSEO(site:Site,force=false):Promise<Site> {
   if(isMock())return site;
-  const result=await this.structured(z.object({pages:z.array(z.object({id:z.string(),seo:seoSchema}))}),prompts.seo,{business:site.business,language:site.language,pages:site.pages.map(p=>({id:p.id,title:p.title,sections:p.sections.map(s=>({title:s.title,body:s.body}))}))},force);
+  const result=await this.structured(z.object({pages:z.array(z.object({id:z.string(),seo:seoSchema}))}),prompts.seo,{business:site.business,language:site.language,pages:site.pages.filter(p=>!isRequiredPageSlug(p.slug)).map(p=>({id:p.id,title:p.title,sections:p.sections.map(s=>({title:s.title,body:s.body}))}))},force);
   return {...site,pages:site.pages.map(p=>({...p,seo:result.pages.find(x=>x.id===p.id)?.seo||p.seo}))};
  }
 }

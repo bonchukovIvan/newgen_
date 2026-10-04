@@ -17,7 +17,7 @@ test('Generated business: account, wizard, generation, editing, images, preview,
  const id=page.url().split('/').pop()!;
  await expect(page.getByRole('button',{name:'Export site',exact:true})).toBeVisible({timeout:120000});
  const getProject=async()=>{const response=await page.request.get('/api/projects/'+id);expect(response.ok()).toBeTruthy();return response.json();};
- let p=await getProject();expect(p.site.pages).toHaveLength(6);expect(p.site.assets.length).toBeGreaterThan(0);
+ let p=await getProject();expect(p.site.pages).toHaveLength(10);expect(p.site.assets.length).toBeGreaterThan(0);
  await page.locator('.section-list>div').first().locator('button').first().click();
  await page.getByLabel('Heading',{exact:true}).fill('Let’s play together.');
  await page.getByLabel('Composition',{exact:true}).selectOption('hero-centered');
@@ -36,7 +36,7 @@ test('Generated business: account, wizard, generation, editing, images, preview,
  await page.getByRole('button',{name:'Pages',exact:true}).click();
  page.once('dialog',dialog=>dialog.accept('Team'));
  await page.getByRole('button',{name:'Add page',exact:true}).click();
- await expect.poll(async()=>(await getProject()).site.pages.length).toBe(7);
+ await expect.poll(async()=>(await getProject()).site.pages.length).toBe(11);
  const bad=structuredClone((await getProject()).site);bad.pages[0].sections[0].href='/missing-page';
  const invalidSave=await page.request.patch('/api/projects/'+id,{data:{site:bad,version:(await getProject()).version}});expect(invalidSave.status()).toBe(400);
  // A second account cannot read or mutate this project.
