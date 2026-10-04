@@ -63,7 +63,7 @@ export class OpenAIProvider implements AIProvider {
   if(isMock())return page;
   const original=page.sections[0];
   const schema=z.object({intro:z.string().max(1000),items:z.array(z.object({title:z.string().min(1).max(300),text:z.string().min(1).max(3000)})).min(original.items.length).max(original.items.length),seo:seoSchema});
-  const draft=await this.structured(schema,prompts.requiredPage,{page:{title:page.title,slug:page.slug,topics:original.items.map(item=>({title:item.title,text:item.text}))},business:{name:site.business.name,category:site.business.category,city:site.business.city,country:site.business.country},brief:{language:brief.language,services:brief.services,description:brief.description},verifiedWebsiteBehavior:{contactFormFields:['name','email','optional phone','message'],submissionStorage:'Preview submissions are stored in the Axogen workspace database; exported site submissions are stored in its SQLite database.',optionalWebhook:'A configured webhook can receive submissions.',defaultExportCookies:'The included exported site server does not set cookies.',defaultExportTracking:'No analytics or advertising scripts are included by default.'}},force,value=>{
+  const draft=await this.structured(schema,prompts.requiredPage,{page:{title:page.title,slug:page.slug,topics:original.items.map(item=>({title:item.title,text:item.text}))},business:{name:site.business.name,category:site.business.category,city:site.business.city,country:site.business.country},brief:{language:brief.language,services:brief.services,description:brief.description},verifiedWebsiteBehavior:{contactFormFields:['name','email','optional phone','message'],submissionStorage:'Node.js and PHP packages store contact submissions server-side. Static HTML has no included contact-form backend; an external form service must be configured.',optionalWebhook:'The Node.js package can optionally send submissions to a configured webhook.',defaultExportCookies:'The included export code does not set cookies.',defaultExportTracking:'No analytics or advertising scripts are included by default.'}},force,value=>{
    if(value.items.length!==original.items.length)throw new Error('Preserve every required policy topic');
    const check={...original,body:value.intro,items:value.items.map(item=>({...item,image:'',href:'',factRef:''}))};checkGeneratedCopy(check,site.business);
   });
@@ -76,7 +76,7 @@ export class OpenAIProvider implements AIProvider {
   if(isMock())return page;
   const candidate=await this.structured(pageSchema,prompts.writer,{business:site.business,brief:briefForPublication(brief),page,sitemap:site.pages.map(p=>p.slug)},force,candidate=>{if(candidate.sections.length!==page.sections.length)throw new Error('Preserve the section count');candidate.sections.forEach(s=>checkGeneratedCopy(s,site.business));});
   if(candidate.sections.length!==page.sections.length)throw new Error('Writer changed the section structure');
-  const result={...candidate,id:page.id,slug:page.slug,title:page.title,sections:candidate.sections.map((s,i)=>({...s,id:page.sections[i].id,type:page.sections[i].type,variant:page.sections[i].variant,imageId:page.sections[i].imageId,items:['team','testimonials','pricing','trustStats','logos'].includes(s.type)?page.sections[i].items:s.items.map((item,j)=>({...item,image:page.sections[i].items[j]?.image||''}))}))};
+  const result={...candidate,id:page.id,slug:page.slug,title:page.title,sections:candidate.sections.map((s,i)=>({...s,id:page.sections[i].id,type:page.sections[i].type,variant:page.sections[i].variant,eyebrow:page.sections[i].type==='hero'?'':s.eyebrow,imageId:page.sections[i].imageId,items:['team','testimonials','pricing','trustStats','logos'].includes(s.type)?page.sections[i].items:s.items.map((item,j)=>({...item,image:page.sections[i].items[j]?.image||''}))}))};
   result.sections.forEach(s=>checkGeneratedCopy(s,site.business));return result;
  }
  async generateSection(site:Site,section:Section,brief:Brief,force=false):Promise<Section> {
@@ -85,7 +85,7 @@ export class OpenAIProvider implements AIProvider {
   if(isMock())return {...section,title:section.title.endsWith(' — made for you')?section.title.replace(' — made for you',''):section.title+' — made for you',body:section.body+' Tell us what you have in mind.'};
   const publicBrief=briefForPublication(brief);
   const candidate=await this.structured(sectionSchema,prompts.section,{business:site.business,brief:publicBrief,section,sitemap:site.pages.map(p=>p.slug)},force,s=>checkGeneratedCopy(s,site.business));
-  const result={...candidate,id:section.id,type:section.type,variant:section.variant,imageId:section.imageId,items:['team','testimonials','pricing','trustStats','logos'].includes(section.type)?section.items:candidate.items.map((item,i)=>({...item,image:section.items[i]?.image||''}))};checkGeneratedCopy(result,site.business);return result;
+  const result={...candidate,id:section.id,type:section.type,variant:section.variant,eyebrow:section.type==='hero'?'':candidate.eyebrow,imageId:section.imageId,items:['team','testimonials','pricing','trustStats','logos'].includes(section.type)?section.items:candidate.items.map((item,i)=>({...item,image:section.items[i]?.image||''}))};checkGeneratedCopy(result,site.business);return result;
  }
  async generateSEO(site:Site,force=false):Promise<Site> {
   if(isMock())return site;

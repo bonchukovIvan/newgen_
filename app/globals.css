@@ -18,3 +18,5 @@
 .page-actions{display:flex;flex-wrap:wrap;gap:5px;margin:9px 0 17px}
 .page-actions .button{font-size:10px;padding:6px 8px;min-height:30px}
 .wizard.wizard-single{display:block;width:min(680px,100%);min-height:0}.wizard-single .wizard-content{min-height:0;max-height:90vh}.wizard-single .wizard-fields{flex:none}.wizard-single .wizard-fields>.notice{margin-top:8px}@media(max-width:767px){.wizard-single .field-row{grid-template-columns:1fr}.wizard-single .wizard-content{max-height:95vh}}
+.editor-header .export-format-select{width:auto;max-width:225px;min-height:40px;padding:9px 12px;font-size:12px}
+@media(max-width:767px){.editor-header{height:auto;min-height:61px;flex-wrap:wrap;padding:9px 12px}.editor-header>div:first-child{flex:1 1 100%}.editor-header>div:last-child{width:100%;min-width:0}.editor-header .export-format-select{width:auto;max-width:none;min-width:0;flex:1 1 auto;min-height:34px;padding:7px 5px;font-size:9px}}

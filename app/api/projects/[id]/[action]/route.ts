@@ -4,14 +4,16 @@ import {db,json} from '@/lib/db';
 import {route,ownedProject,readJson,originGuard,rateLimit,HttpError} from '@/lib/http';
 import {briefSchema,jobPayloadSchema,siteSchema} from '@/lib/validation/site';
 import {queueJob,saveSite,updateBrief} from '@/lib/projects';
-import {lookupPlace,googlePhoto} from '@/lib/google/places';
+import {lookupPlace,googlePhoto,suggestBusinessAddress} from '@/lib/google/places';
 import {saveImage} from '@/lib/images';
 import {exportSite} from '@/lib/export/runner';
+import {isExportFormat} from '@/lib/export/formats';
 type Context={params:Promise<{id:string;action:string}>};
 export function GET(request:Request,c:Context){return route(async()=>{const {id,action}=await c.params;const p=await ownedProject(id);
- if(action==='export'){if(!p.site)throw new HttpError(400,'Generate a website first');await rateLimit('export:'+p.userId,10,60);const result=await exportSite(p.id,siteSchema.parse(p.site));if(new URL(request.url).searchParams.get('format')==='directory')return NextResponse.json({directory:result.directory});return new Response(new Uint8Array(result.zip),{headers:{'Content-Type':'application/zip','Content-Disposition':`attachment; filename="${p.id}-website.zip"`}});}
+ if(action==='export'){if(!p.site)throw new HttpError(400,'Generate a website first');await rateLimit('export:'+p.userId,10,60);const requested=new URL(request.url).searchParams.get('format')||'node';if(requested!=='directory'&&!isExportFormat(requested))throw new HttpError(400,'Unsupported export format');const format=requested==='directory'?'node':requested;const result=await exportSite(p.id,siteSchema.parse(p.site),format);if(requested==='directory')return NextResponse.json({directory:result.directory});return new Response(new Uint8Array(result.zip),{headers:{'Content-Type':'application/zip','Content-Disposition':`attachment; filename="${p.id}-website-${format}.zip"`}});}
  if(action==='revisions')return NextResponse.json(await db.revision.findMany({where:{projectId:id},orderBy:{createdAt:'desc'},take:20,select:{id:true,label:true,createdAt:true}}));
  if(action==='places'){await rateLimit('places:'+p.userId,10,60);const place=await lookupPlace(briefSchema.parse(p.brief),p.id);const photo=place?.id?await googlePhoto(place.id,p.id).catch(()=>null):null;return NextResponse.json({place,photo});}
+ if(action==='contact-suggestion'){await rateLimit('contact-suggestion:'+p.userId,10,60);const brief=briefSchema.parse(p.brief);return NextResponse.json({place:await suggestBusinessAddress(brief.name,brief.city,brief.country,p.id)});}
  throw new HttpError(404,'Unknown action');});}
 export function POST(request:Request,c:Context){return route(async()=>{originGuard(request);const {id,action}=await c.params;const p=await ownedProject(id);
  if(action==='generate'){await rateLimit('generate:'+p.userId,30,3600);return NextResponse.json(await queueJob(id,jobPayloadSchema.parse(await readJson(request))));}

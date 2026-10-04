@@ -2,18 +2,21 @@ import type { Brief, Fact, Site, Section } from '@/lib/validation/site';
 export function businessFromBrief(b:Brief):Site['business'] {
  const facts:Record<string,Fact>={};
  const suppliedFacts={...b.facts};
- delete suppliedFacts.address;delete suppliedFacts.phone;delete suppliedFacts.email;
+ delete suppliedFacts.address;delete suppliedFacts.phone;delete suppliedFacts.email;delete suppliedFacts.googleContactName;delete suppliedFacts.generatedContactSample;
  if(!b.addressVerified){delete suppliedFacts.latitude;delete suppliedFacts.longitude;}
- for(const [key,value] of Object.entries({...suppliedFacts,name:b.name,category:b.category,city:b.city,country:b.country,address:b.addressVerified?b.address:'',phone:b.phoneVerified?b.phone:'',email:b.emailVerified&&!/\.example$/i.test(b.email)?b.email:''})) if(value){
-  const generated=b.autoGenerate&&(key==='name'||key==='city');
-  facts[key]={value,source:generated?'AI generated draft':'business owner',classification:generated?'AI_GENERATED':'USER_PROVIDED'};
+ const hasSample=b.autoGenerate&&b.facts.generatedContactSample==='true';
+ for(const [key,value] of Object.entries({...suppliedFacts,name:b.name,category:b.category,city:b.city,country:b.country,address:hasSample?b.address:b.addressVerified?b.address:'',phone:hasSample?b.phone:b.phoneVerified?b.phone:'',email:hasSample?b.email:b.emailVerified&&!/\.example$/i.test(b.email)?b.email:''})) if(value){
+  const sampleContact=hasSample&&((key==='address'&&!b.addressVerified)||(key==='phone'&&!b.phoneVerified)||(key==='email'&&!b.emailVerified));
+  const generated=b.autoGenerate&&(key==='name'||key==='city'||sampleContact);
+  const source=sampleContact?(key==='email'?'Generated email placeholder':`Google Places sample: ${b.facts.googleContactName||'local venue'}`):generated?'AI generated draft':'business owner';
+  facts[key]={value,source:source.slice(0,100),classification:generated?'AI_GENERATED':'USER_PROVIDED'};
  }
  b.testimonials.forEach((x,i)=>facts[`testimonial-${i}`]={value:`${x.quote} — ${x.name}`,source:'business owner',classification:'USER_PROVIDED'});
  b.team.forEach((x,i)=>facts[`team-${i}`]={value:`${x.name} — ${x.role}`,source:'business owner',classification:'USER_PROVIDED'});
  b.pricing.forEach((x,i)=>facts[`pricing-${i}`]={value:`${x.name}: ${x.price}. ${x.description}`,source:'business owner',classification:'USER_PROVIDED'});
  return {name:b.name,category:b.category,city:b.city,country:b.country,facts};
 }
-export function briefForPublication(b:Brief):Brief{const facts={...b.facts};if(!b.addressVerified){delete facts.address;delete facts.latitude;delete facts.longitude;}if(!b.phoneVerified)delete facts.phone;if(!b.emailVerified)delete facts.email;return {...b,address:b.addressVerified?b.address:'',phone:b.phoneVerified?b.phone:'',email:b.emailVerified&&!/\.example$/i.test(b.email)?b.email:'',placeId:b.addressVerified?b.placeId:'',placeUrl:b.addressVerified?b.placeUrl:'',facts};}
+export function briefForPublication(b:Brief):Brief{const facts={...b.facts};delete facts.googleContactName;delete facts.generatedContactSample;if(!b.addressVerified){delete facts.address;delete facts.latitude;delete facts.longitude;}if(!b.phoneVerified)delete facts.phone;return {...b,address:b.addressVerified?b.address:'',phone:b.phoneVerified?b.phone:'',email:b.emailVerified&&!/\.example$/i.test(b.email)?b.email:'',placeId:b.addressVerified?b.placeId:'',placeUrl:b.addressVerified?b.placeUrl:'',facts};}
 export function protectFacts(original:Site['business'],candidate:Site['business']) {
  return {...candidate,...original,facts:{...original.facts}};
 }

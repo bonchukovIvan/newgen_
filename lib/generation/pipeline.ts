@@ -22,7 +22,23 @@ export async function runStage(projectId:string,stage:number,site:Site,brief:Bri
  case 5:return site;
  case 6:{for(let i=0;i<site.pages.length;i++){const key='page:'+site.pages[i].id;const existing=await db.generationLog.findFirst({where:{jobId:activeJobId,stage,message:key}});if(existing)continue;site.pages[i]=await ai.generatePage(site,site.pages[i],publicBrief,force);await checkpoint(site);await db.generationLog.create({data:{jobId:activeJobId,stage,message:key}});}return site;}
  case 7:for(const page of site.pages)for(const s of page.sections)if(s.imageIntent)s.imageIntent=`${s.imageIntent}. ${brief.category} in ${brief.city}. ${readable(site.theme.background)==='#ffffff'?'Atmospheric dark':'Bright natural'} light.`.slice(0,1000);return site;
- case 8:{let imageCount=site.assets.length;for(const page of site.pages)for(const s of page.sections){if(!s.imageIntent||s.imageId)continue;if(brief.imageStrategy==='google'){const owned=site.assets.find(a=>a.provider==='upload'&&!site.pages.some(p=>p.sections.some(section=>section.imageId===a.id)))||site.assets.find(a=>a.provider==='upload');if(owned){s.imageId=owned.id;continue;}}if(imageCount>=4&&s.type!=='hero'){const existing=site.assets.find(a=>a.intent.includes(brief.category));if(existing)s.imageId=existing.id;continue;}if(imageCount>=6)continue;const result=await obtainImage({projectId,intent:s.imageIntent,query:`${brief.category} ${s.type==='hero'?'interior environment':s.title} commercial photography`,style:brief.style,orientation:'landscape',force},brief.imageStrategy);site.assets.push(result.asset);site.warnings.push(...result.warnings);s.imageId=result.asset.id;imageCount++;await checkpoint(site);}return site;}
+ case 8:{
+  let imageCount=site.assets.length;
+  for(const page of site.pages)for(const s of page.sections){
+   if(!s.imageIntent||s.imageId)continue;
+   if(brief.imageStrategy==='google'){const owned=site.assets.find(a=>a.provider==='upload'&&!site.pages.some(p=>p.sections.some(section=>section.imageId===a.id)))||site.assets.find(a=>a.provider==='upload');if(owned){s.imageId=owned.id;continue;}}
+   if(imageCount>=4&&s.type!=='hero'){const existing=site.assets.find(a=>a.intent.includes(brief.category));if(existing)s.imageId=existing.id;continue;}
+   if(imageCount>=6)continue;
+   const result=await obtainImage({projectId,intent:s.imageIntent,query:`${brief.category} ${s.type==='hero'?'interior environment':s.title} commercial photography`,style:brief.style,orientation:'landscape',force},brief.imageStrategy);
+   site.assets.push(result.asset);site.warnings.push(...result.warnings);s.imageId=result.asset.id;imageCount++;await checkpoint(site);
+  }
+  if(!site.faviconId){
+   const intent=`simple recognizable ${brief.category} symbol for ${site.business.name}; one centered shape, high contrast, no text`;
+   const result=await obtainImage({projectId,intent,query:`${brief.category} isolated icon symbol square`,style:brief.style,orientation:'square',purpose:'favicon',force},brief.imageStrategy);
+   site.assets.push(result.asset);site.faviconId=result.asset.id;site.warnings.push(...result.warnings);await checkpoint(site);
+  }
+  return site;
+ }
  case 9:return ai.generateSEO(site,force);
  case 10:return enforceSite(site);
  case 11:{const parsed=siteSchema.parse(repairGeneratedLinks(site));assertInternalLinks(parsed);const titles=new Set(parsed.pages.map(p=>p.seo.title));if(titles.size!==parsed.pages.length)throw new Error('Pages must have unique SEO titles');return parsed;}
@@ -55,8 +71,9 @@ export async function processJob(jobId:string,owner:string) {
    if(payload.scope==='theme')site=await ai.generateDesign(site,brief,true);
    else if(payload.scope==='image'){
     const asset=site.assets.find(a=>a.id===payload.assetId);if(!asset)throw new Error('Image not found');
-    const result=await obtainImage({projectId:job.projectId,intent:asset.intent,query:asset.prompt,style:brief.style,orientation:'landscape',force:true},brief.imageStrategy);
-    site.assets.push(result.asset);site.warnings.push(...result.warnings);site.pages.forEach(p=>p.sections.forEach(s=>{if(s.imageId===asset.id)s.imageId=result.asset.id;for(const item of s.items)if(item.image===asset.id)item.image=result.asset.id;}));site.assets=site.assets.filter(a=>a.id!==asset.id);
+    const favicon=site.faviconId===asset.id;
+    const result=await obtainImage({projectId:job.projectId,intent:asset.intent,query:asset.prompt,style:brief.style,orientation:favicon?'square':'landscape',purpose:favicon?'favicon':'website',force:true},brief.imageStrategy);
+    site.assets.push(result.asset);site.warnings.push(...result.warnings);site.pages.forEach(p=>p.sections.forEach(s=>{if(s.imageId===asset.id)s.imageId=result.asset.id;for(const item of s.items)if(item.image===asset.id)item.image=result.asset.id;}));if(site.faviconId===asset.id)site.faviconId=result.asset.id;site.assets=site.assets.filter(a=>a.id!==asset.id);
    }else if(payload.scope==='page'){if(!page)throw new Error('Page not found');const replacement=await ai.generatePage(site,page,brief,true);site.pages=site.pages.map(p=>p.id===page.id?replacement:p);}
    else{if(!section||!page)throw new Error('Section not found');const result=await ai.generateSection(site,section,brief,true);const replacement=payload.scope==='headline'?{...section,title:result.title}:payload.scope==='paragraph'?{...section,body:result.body}:result;page.sections=page.sections.map(s=>s.id===section.id?replacement:s);}
    site=enforceSite(siteSchema.parse(repairGeneratedLinks(site)),siteSchema.parse(job.project.site));assertInternalLinks(site);

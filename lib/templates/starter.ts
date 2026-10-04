@@ -16,7 +16,7 @@ export function starterSite(b:Brief,seed=0):Site {
  const pages=unique.map((name,i)=>{
   const slug=i===0?'/':'/'+(name.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')||`service-${i}`);
   const hero=section('hero',i===0?(gaming?'Your next great game starts here.':`${b.category}, with you in mind.`):name,i===0?(b.description||`Explore ${b.services.slice(0,3).join(', ')} in ${b.city}. Tell us what you have in mind.`):`Explore ${name.toLowerCase()} at ${b.name} in ${b.city}.`,seed+i);
-  hero.eyebrow=`${b.city} · ${b.category}`;hero.imageIntent=`${b.category} ${i===0?'wide environment':'detail of '+name.toLowerCase()}, commercial editorial photography, ${b.style}, no text, no logos`;hero.cta=i===0?'Explore our services':'Get in touch';hero.href=i===0?(count<=2?'#services':'/services'):(count===1?'#contact':'/contact');
+  hero.imageIntent=`${b.category} ${i===0?'wide environment':'detail of '+name.toLowerCase()}, commercial editorial photography, ${b.style}, no text, no logos`;hero.cta=i===0?'Explore our services':'Get in touch';hero.href=i===0?(count<=2?'#services':'/services'):(count===1?'#contact':'/contact');
   const services=section('services',gaming?'Find your way to play.':'Built around what you need.',`Explore what ${b.name} has to offer.`,seed+i);
   services.id='services-'+i;services.items=b.services.map(title=>({title,text:`Talk to us about ${title.toLowerCase()} and the options that fit your plans.`,href:count===1?'#contact':'/contact',image:'',factRef:''}));
   const about=section('about',gaming?'Good games. Better company.':`A local approach to ${b.category.toLowerCase()}.`,b.description||`${b.name} brings ${b.services.slice(0,2).join(' and ').toLowerCase()} to ${b.city}. Get in touch to discuss what you need.`,seed+i);
@@ -33,5 +33,5 @@ export function starterSite(b:Brief,seed=0):Site {
   if(count===1)sections.push(contact);
   return {id:crypto.randomUUID(),slug,title:name,objective:`Help visitors understand ${name.toLowerCase()} and contact the business`,seo:{title:`${name==='Home'?b.category:name} in ${b.city} | ${b.name}`.slice(0,160),description:`Explore ${name==='Home'?b.services.join(', '):name.toLowerCase()} at ${b.name} in ${b.city}. Get in touch to discuss your needs.`.slice(0,320),ogTitle:`${b.name} · ${name}`,ogDescription:(b.description||`${b.category} in ${b.city}`).slice(0,320)},sections};
  });
- return {schemaVersion:1,language:b.language,business,theme:createTheme(b.style,b.dark,b.primary),navigation:gaming?'split':'inline',footer:'columns',pages:[...pages,...buildRequiredPages(b)],assets:[],domain:'',warnings:['Privacy, GDPR, and cookie pages are drafts. Confirm legal details and contact information before publishing.']};
+ return {schemaVersion:1,language:b.language,business,theme:createTheme(b.style,b.dark,b.primary),navigation:gaming?'split':'inline',footer:'columns',pages:[...pages,...buildRequiredPages(b)],assets:[],faviconId:'',domain:'',warnings:['Privacy, GDPR, and cookie pages are drafts. Confirm legal details and contact information before publishing.']};
 }

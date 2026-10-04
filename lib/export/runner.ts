@@ -3,9 +3,10 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { Site } from '@/lib/validation/site';
 import {assertInternalLinks} from '@/lib/validation/site';
+import type {ExportFormat} from './formats';
 
 /** Rendering runs outside the RSC bundle but uses the exact preview components. */
-export async function exportSite(projectId: string, site: Site) {
+export async function exportSite(projectId: string, site: Site, format: ExportFormat='node') {
   assertInternalLinks(site);
   const result = await new Promise<{directory: string; archive: string}>((resolve, reject) => {
     const child = spawn(process.execPath, ['--import', 'tsx', 'scripts/export.ts'], {
@@ -22,7 +23,7 @@ export async function exportSite(projectId: string, site: Site) {
       try { resolve(JSON.parse(output)); } catch { reject(new Error('Invalid export result')); }
     });
     child.stdin.on('error', () => { /* close/error handlers report worker failures */ });
-    child.stdin.end(JSON.stringify({projectId, site}));
+    child.stdin.end(JSON.stringify({projectId, site, format}));
   });
   const root = path.resolve(process.env.EXPORT_DIR || 'generated-sites') + path.sep;
   if (!result.archive.startsWith(root)) throw new Error('Invalid export destination');

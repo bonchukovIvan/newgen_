@@ -8,7 +8,7 @@ import {db,json} from '@/lib/db';
 import {isMock} from '@/lib/env';
 import {cached,cacheKey} from '@/lib/cache';
 import {track} from '@/lib/usage';
-export interface ImageContext {projectId:string;intent:string;query:string;style:string;orientation:'landscape'|'portrait'|'square';force?:boolean;}
+export interface ImageContext {projectId:string;intent:string;query:string;style:string;orientation:'landscape'|'portrait'|'square';purpose?:'website'|'favicon';force?:boolean;}
 export interface ImageResult {bytes?:Buffer;url?:string;provider:string;attribution:string;sourceUrl:string;width:number;height:number;}
 export interface ImageProvider {name:string;searchImages?(context:ImageContext):Promise<ImageResult[]>;generateImage?(context:ImageContext):Promise<ImageResult>;}
 export const assetRoot=()=>path.resolve(process.env.ASSET_DIR||'public/uploads');
@@ -33,7 +33,8 @@ export class GPTImageProvider implements ImageProvider {
  async generateImage(c:ImageContext):Promise<ImageResult> {
   const key=process.env.OPENAI_IMAGE_API_KEY||process.env.OPENAI_API_KEY;if(!key)throw new Error('OpenAI images are not configured');
   const client=new OpenAI({apiKey:key,timeout:180000,maxRetries:1});
-  const response=await client.images.generate({model:process.env.OPENAI_IMAGE_MODEL||'gpt-image-2',prompt:`Original commercial photograph. ${c.intent}. ${c.style} art direction. ${c.orientation} composition, natural materials and light, no text, no logos. Illustrative concept, not a documentary image of a real business.`,size:c.orientation==='landscape'?'1536x1024':c.orientation==='portrait'?'1024x1536':'1024x1024',n:1});
+  const prompt=c.purpose==='favicon'?`Original favicon artwork for a ${c.intent}. ${c.style} art direction. One simple centered symbol, bold silhouette, high contrast, square composition, no text, no letters, no existing logo or trademark.`:`Original commercial photograph. ${c.intent}. ${c.style} art direction. ${c.orientation} composition, natural materials and light, no text, no logos. Illustrative concept, not a documentary image of a real business.`;
+  const response=await client.images.generate({model:process.env.OPENAI_IMAGE_MODEL||'gpt-image-2',prompt,size:c.orientation==='landscape'?'1536x1024':c.orientation==='portrait'?'1024x1536':'1024x1024',n:1});
   await track(c.projectId,this.name,'generate');const image=response.data?.[0]?.b64_json;if(!image)throw new Error('Image provider returned no image');return {bytes:Buffer.from(image,'base64'),provider:this.name,attribution:'AI-generated illustration',sourceUrl:'',width:1536,height:1024};
  }
 }
@@ -43,7 +44,9 @@ export class ComfyProvider implements ImageProvider {
   const base=process.env.COMFYUI_BASE_URL?.replace(/\/$/,'');if(!base)throw new Error('ComfyUI is not configured');
   const workflow=JSON.parse(await readFile(process.env.COMFYUI_WORKFLOW||'config/comfyui/default.json','utf8'));
   function substitute(value:unknown):unknown {if(value==='{{SEED}}')return Math.floor(Math.random()*1e9);if(typeof value==='string')return value.replaceAll('{{PROMPT}}',c.intent+', '+c.style).replaceAll('{{SEED}}',String(Math.floor(Math.random()*1e9)));if(Array.isArray(value))return value.map(substitute);if(value&&typeof value==='object')return Object.fromEntries(Object.entries(value).map(([k,v])=>[k,substitute(v)]));return value;}
-  const queued=await fetch(base+'/prompt',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt:substitute(workflow),client_id:randomUUID()}),signal:AbortSignal.timeout(10000)});
+  const prompt=substitute(workflow) as Record<string,{class_type?:string;inputs?:Record<string,unknown>}>;
+  if(c.orientation==='square')for(const node of Object.values(prompt))if(node?.class_type==='EmptyLatentImage'||node?.class_type==='EmptySD3LatentImage'){if(node.inputs){node.inputs.width=512;node.inputs.height=512;}}
+  const queued=await fetch(base+'/prompt',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt,client_id:randomUUID()}),signal:AbortSignal.timeout(10000)});
   if(!queued.ok)throw new Error(`ComfyUI rejected workflow (${queued.status})`);const {prompt_id}=await queued.json();
   const end=Date.now()+180000;while(Date.now()<end){await new Promise(r=>setTimeout(r,2000));const response=await fetch(base+'/history/'+encodeURIComponent(prompt_id),{signal:AbortSignal.timeout(10000)});if(!response.ok)continue;const history=(await response.json())[prompt_id];if(history?.status?.status_str==='error')throw new Error('ComfyUI workflow failed');const outputs=Object.values(history?.outputs||{}) as {images?:{filename:string;subfolder:string;type:string}[]}[];const file=outputs.flatMap(o=>o.images||[])[0];if(file){const image=await fetch(base+'/view?'+new URLSearchParams(file),{signal:AbortSignal.timeout(20000)});if(!image.ok)throw new Error('ComfyUI image download failed');await track(c.projectId,this.name,'generate');return {bytes:Buffer.from(await image.arrayBuffer()),provider:this.name,attribution:'AI-generated illustration',sourceUrl:'',width:1536,height:1024};}}
   throw new Error('ComfyUI timed out');
@@ -53,6 +56,10 @@ export class PlaceholderProvider implements ImageProvider {
  name='placeholder';
  async generateImage(c:ImageContext):Promise<ImageResult> {
   const n=[...c.intent+(c.force?randomUUID():'')].reduce((a,x)=>a+x.charCodeAt(0),0)%360;
+  if(c.purpose==='favicon'){
+   const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512"><rect width="512" height="512" rx="112" fill="hsl(${n},55%,19%)"/><path d="M256 68 442 256 256 444 70 256Z" fill="hsl(${(n+60)%360},75%,69%)"/><circle cx="256" cy="256" r="112" fill="hsl(${n},55%,19%)"/><circle cx="256" cy="256" r="66" fill="hsl(${(n+60)%360},75%,69%)"/></svg>`;
+   return {bytes:Buffer.from(svg),provider:this.name,attribution:'Original abstract favicon',sourceUrl:'',width:512,height:512};
+  }
   const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000"><defs><linearGradient id="a" x2="1" y2="1"><stop stop-color="hsl(${n},50%,12%)"/><stop offset="1" stop-color="hsl(${(n+60)%360},40%,28%)"/></linearGradient><linearGradient id="b" x2="1" y2="1"><stop stop-color="hsl(${n},70%,78%)"/><stop offset="1" stop-color="hsl(${(n+80)%360},80%,55%)"/></linearGradient></defs><rect width="1600" height="1000" fill="url(#a)"/><g fill="none" stroke="url(#b)" stroke-width="2" opacity=".45">${Array.from({length:16},(_,i)=>`<ellipse cx="800" cy="500" rx="${180+i*30}" ry="${150+i*17}" transform="rotate(${i*8} 800 500)"/>`).join('')}</g><circle cx="800" cy="500" r="145" fill="url(#b)"/><circle cx="850" cy="450" r="135" fill="url(#a)"/><path d="M0 850L1600 350M0 880L1600 380" stroke="white" opacity=".08"/></svg>`;
   return {bytes:Buffer.from(svg),provider:this.name,attribution:'Original abstract illustration',sourceUrl:'',width:1600,height:1000};
  }
@@ -60,7 +67,7 @@ export class PlaceholderProvider implements ImageProvider {
 export function providerOrder(strategy:Brief['imageStrategy']):ImageProvider[] {
  const stock=new PexelsProvider(),ai=new GPTImageProvider(),comfy=new ComfyProvider(),fallback=new PlaceholderProvider();
  if(isMock()||strategy==='manual')return[fallback];
- return strategy==='pexels'?[stock,fallback]:strategy==='gpt-image-2'?[ai,fallback]:strategy==='comfyui'?[comfy,ai,stock,fallback]:strategy==='google'?[ai,stock,comfy,fallback]:[stock,ai,comfy,fallback];
+ return strategy==='pexels'?[stock,fallback]:strategy==='gpt-image-2'?[ai,fallback]:strategy==='comfyui'?[comfy,fallback]:strategy==='google'?[ai,stock,comfy,fallback]:[stock,ai,comfy,fallback];
 }
 export async function obtainImage(c:ImageContext,strategy:Brief['imageStrategy']):Promise<{asset:Asset;warnings:string[]}> {
  const warnings:string[]=[];
