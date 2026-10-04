@@ -4,7 +4,7 @@ import {createTheme} from '@/lib/templates/themes';
 import {businessFromBrief} from '@/lib/generation/facts';
 import {buildRequiredPages} from '@/lib/generation/required-pages';
 export const demoBrief=briefSchema.parse({name:'NovaForge Esports',category:'Gaming lounge',city:'Manchester',country:'United Kingdom',services:['PC Gaming','Console Gaming','Esports Events','Private Events','Coaching'],style:'Gaming',dark:true,tone:'bold',primary:'#a38aff',pageCount:6,imageStrategy:'mixed',description:'A place for Manchester players to get together, find their next game, and enjoy playing in person.'});
-export function newSection(type:SectionType,index=0):Section {return {id:crypto.randomUUID(),type,variant:variantFor(type,index),eyebrow:'',title:type==='cta'?'Let’s talk about what you need':type.charAt(0).toUpperCase()+type.slice(1),body:'',cta:'Get in touch',href:'/contact',imageId:'',imageIntent:'',items:[]};}
+export function newSection(type:SectionType,index=0):Section {return {id:crypto.randomUUID(),type,variant:variantFor(type,index),eyebrow:'',title:type==='cta'?'Tell us what you need':type.charAt(0).toUpperCase()+type.slice(1),body:'',cta:'Get in touch',href:'/contact',imageId:'',imageIntent:'',items:[]};}
 function section(type:SectionType,title:string,body:string,seed:number):Section {return {...newSection(type,seed),title,body};}
 export function starterSite(b:Brief,seed=0):Site {
  seed += [...b.name+b.style].reduce((sum,c)=>sum+c.charCodeAt(0),0);
@@ -15,16 +15,16 @@ export function starterSite(b:Brief,seed=0):Site {
  while(unique.length<count)unique.push(`Service guide ${unique.length-3}`);
  const pages=unique.map((name,i)=>{
   const slug=i===0?'/':'/'+(name.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')||`service-${i}`);
-  const hero=section('hero',i===0?(gaming?'Your next great game starts here.':`${b.category}, with you in mind.`):name,i===0?(b.description||`Explore ${b.services.slice(0,3).join(', ')} in ${b.city}. Tell us what you have in mind.`):`Explore ${name.toLowerCase()} at ${b.name} in ${b.city}.`,seed+i);
+  const hero=section('hero',i===0?(gaming?`PC and console gaming in ${b.city}.`:`${b.category} in ${b.city}.`):name,i===0?(b.description||`${b.name} offers ${b.services.slice(0,3).join(', ')}. Contact us to discuss your plans.`):`${name} at ${b.name} in ${b.city}.`,seed+i);
   hero.imageIntent=`${b.category} ${i===0?'wide environment':'detail of '+name.toLowerCase()}, commercial editorial photography, ${b.style}, no text, no logos`;hero.cta=i===0?'Explore our services':'Get in touch';hero.href=i===0?(count<=2?'#services':'/services'):(count===1?'#contact':'/contact');
-  const services=section('services',gaming?'Find your way to play.':'Built around what you need.',`Explore what ${b.name} has to offer.`,seed+i);
+  const services=section('services',gaming?'Ways to play.':'Our services.',`${b.name} offers ${b.services.slice(0,3).join(', ')}.`,seed+i);
   services.id='services-'+i;services.items=b.services.map(title=>({title,text:`Talk to us about ${title.toLowerCase()} and the options that fit your plans.`,href:count===1?'#contact':'/contact',image:'',factRef:''}));
   const about=section('about',gaming?'Good games. Better company.':`A local approach to ${b.category.toLowerCase()}.`,b.description||`${b.name} brings ${b.services.slice(0,2).join(' and ').toLowerCase()} to ${b.city}. Get in touch to discuss what you need.`,seed+i);
   about.eyebrow='A little about us';about.imageIntent=`${b.category} environment, natural detail, ${b.style}, no logos`;
   const faq=section('faq','A few things you might be wondering.','Start here, or contact us with a specific question.',seed+i);
   faq.items=[{title:'How can I find out more?',text:'Use the contact form to tell us what you have in mind. Include your preferred dates and any questions.',href:'',image:'',factRef:''},{title:'Which services can I ask about?',text:`Ask us about ${b.services.join(', ')}.`,href:'',image:'',factRef:''},{title:'Where are you based?',text:`We are based in ${b.city}, ${b.country}. Contact us for directions before visiting.`,href:'',image:'',factRef:''}];
-  const contact=section('contact','Let’s make it happen.','Tell us a little about what you need. We’ll take it from there.',seed+i);contact.id='contact-'+i;
-  const cta=section('cta',gaming?'Ready when you are.':'Let’s take the next step.',`Have a question about ${b.services[0].toLowerCase()}? Get in touch.`,seed+i);cta.href=count===1?'#contact':'/contact';
+  const contact=section('contact','Contact us.','Send a message with your question or plans.',seed+i);contact.id='contact-'+i;
+  const cta=section('cta','Ask about our services.',`Contact us about ${b.services[0].toLowerCase()}.`,seed+i);cta.href=count===1?'#contact':'/contact';
   let sections=i===0?[hero,services,about,faq,cta]:name==='Services'?[hero,services,cta]:name==='About'?[hero,about,cta]:name==='Contact'?[contact]:name==='FAQ'?[hero,faq,cta]:[hero,services,cta];
   if(name==='Gallery'){const gallery=section('gallery','A closer look.','Illustrative imagery for our services.',seed);gallery.imageIntent=`${b.category} atmosphere and details`;sections=[hero,gallery,cta];}
   if(name==='Pricing'){const price=section('pricing','Choose what fits.','Prices supplied by the business.',seed);price.items=b.pricing.map((x,j)=>({title:x.name,text:business.facts[`pricing-${j}`].value,factRef:`pricing-${j}`,href:'/contact',image:''}));sections=[hero,price,cta];}
