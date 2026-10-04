@@ -11,10 +11,10 @@ const languages=['English','French','German','Spanish','Italian','Portuguese','U
 export function Wizard({onClose,onCreated}:{onClose:()=>void;onCreated:(id:string)=>void}){
  const[error,setError]=useState(''),[busy,setBusy]=useState(false);
  const{register,handleSubmit,setValue,watch}=useForm<NewProjectInput>({defaultValues:{...defaults,category:''}});
- const size=watch('size');
+ const size=watch('size'),websiteType=watch('websiteType');
  async function generate(values:NewProjectInput){
   setError('');setBusy(true);
-  try{const data=newProjectSchema.parse(values);const project=await api<{id:string}>('/api/projects',{method:'POST',body:JSON.stringify(data)});onCreated(project.id);}
+  try{const data=newProjectSchema.parse({...values,pricing:values.websiteType==='blog'?[]:values.pricing});const project=await api<{id:string}>('/api/projects',{method:'POST',body:JSON.stringify(data)});onCreated(project.id);}
   catch(e){setError(e instanceof Error?e.message:'Could not create project');}
   finally{setBusy(false);}
  }
@@ -22,15 +22,17 @@ export function Wizard({onClose,onCreated}:{onClose:()=>void;onCreated:(id:strin
   <form className="wizard-content" onSubmit={handleSubmit(generate)}>
    <button type="button" className="icon-button wizard-close" onClick={onClose} aria-label="Close creation form"><X size={20}/></button>
    <p className="eyebrow">A NEW BEGINNING</p><h2 id="wizard-title">Create your website</h2>
-   <p className="muted">Tell us the industry, location, and size. AI will build the business details, design, copy, and images.</p>
+   <p className="muted">Choose a website type, industry, location, and size. AI will build the design, copy, and images.</p>
    <div className="wizard-fields">
+    <label>Website type<select {...register('websiteType')}><option value="business">Business · services and pricing</option><option value="blog">Blog · articles and topics</option></select></label>
     <div className="field-row"><label>Industry / category<input {...register('category',{required:true,minLength:2})} placeholder="e.g. Gaming lounge" autoFocus/></label><label>Country<input {...register('country',{required:true})} placeholder="United Kingdom"/></label></div>
+    {websiteType==='business'&&<label>Prices (optional; one per line: name | price | description)<textarea rows={3} placeholder="e.g. Consultation | £50 | One hour session" onBlur={e=>setValue('pricing',e.target.value.split('\n').map(line=>line.trim()).filter(Boolean).map(line=>{const [name,price,...description]=line.split('|');return {name:name.trim(),price:price?.trim()||'',description:description.join('|').trim()};}))}/><small>Leave blank to show “Ask for a quote” instead of invented prices.</small></label>}
     <div className="field-row"><label>Website size<select {...register('size',{onChange:e=>{const next=e.target.value;if(next==='Landing page')setValue('pageCount',1);else if(next==='Small site')setValue('pageCount',3);else if(next==='Large')setValue('pageCount',Math.max(8,watch('pageCount')||8));}})}><option>Landing page</option><option>Small site</option><option>Standard</option><option>Large</option><option>Custom</option></select></label>
      {size!=='Landing page'&&size!=='Small site'&&<label>Number of pages<input type="number" min={size==='Large'?8:1} max={20} {...register('pageCount',{valueAsNumber:true,min:size==='Large'?8:1,max:20})}/></label>}
     </div>
-    <p className="muted">{size==='Landing page'?'One main page with services and a contact form.':size==='Small site'?'Three main pages: Home, Services, and Contact.':size==='Large'?'At least eight main pages.':`The site will have ${effectivePageCount(size||'Standard',watch('pageCount')||5)} main pages.`} Privacy Policy, GDPR Policy, Cookie Policy, and Business Model pages are added to every site.</p>
+    <p className="muted">{size==='Landing page'?`One main page with ${websiteType==='blog'?'articles':'services and pricing'} and a contact form.`:size==='Small site'?`Three main pages: Home, ${websiteType==='blog'?'Blog':'Services'}, and Contact.`:size==='Large'?'At least eight main pages.':`The site will have ${effectivePageCount(size||'Standard',watch('pageCount')||5)} main pages.`} Privacy Policy, GDPR Policy, Cookie Policy, and Business Model pages are added to every site.</p>
     <div className="field-row"><label>Website language<select {...register('language')}>{languages.map(language=><option key={language}>{language}</option>)}</select></label><label>Images and favicon<select {...register('imageStrategy')}><option value="mixed">Automatic · best available</option><option value="gpt-image-2">GPT Image · AI artwork</option><option value="comfyui">ComfyUI · local AI</option><option value="pexels">Pexels · stock photos</option></select></label></div>
-    <div className="notice"><Sparkles size={18}/><span>AI will choose the colors, fonts, layouts, name, services, and voice. Your image source will supply site images and a favicon; an abstract illustration is used if that source is unavailable. Review generated business facts before publishing.</span></div>
+    <div className="notice"><Sparkles size={18}/><span>AI will choose the colors, fonts, layouts, name, {websiteType==='blog'?'article topics':'services'}, and voice. Your image source will supply site images and a favicon; an abstract illustration is used if that source is unavailable. Review generated details before publishing.</span></div>
    </div>
    {error&&<p className="notice error" role="alert">{error}</p>}
    <div className="wizard-footer"><button type="button" className="button ghost" onClick={onClose}>Cancel</button><button type="submit" className="button primary" disabled={busy}>{busy?<Loader2 className="spin" size={16}/>:<Sparkles size={16}/>} {busy?'Creating project…':'Generate website'}</button></div>

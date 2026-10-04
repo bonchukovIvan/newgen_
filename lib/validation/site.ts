@@ -9,6 +9,7 @@ export const briefSchema = z.object({
   placeId: z.string().max(300).default(''), placeUrl: z.union([z.url(),z.literal('')]).default(''),
   autoGenerate: z.boolean().default(false), addressVerified: z.boolean().default(true), phoneVerified: z.boolean().default(true), emailVerified: z.boolean().default(true),
   description: text.default(''), services: z.array(z.string().min(1).max(120)).min(1).max(30),
+  websiteType: z.enum(['business','blog']).default('business'),
   language: z.string().min(2).max(60).default('English'), size: z.enum(['Landing page','Small site','Standard','Large','Custom']).default('Standard'), pageCount: z.number().int().min(1).max(20).default(5),
   style: z.string().max(80).default('Modern Corporate'), tone: z.enum(['professional','friendly','premium','technical','bold','playful','luxury','minimal','authoritative']).default('professional'),
   primary: z.string().regex(/^#[0-9a-fA-F]{6}$/).default('#6d5dfc'), dark: z.boolean().default(false),

@@ -33,6 +33,10 @@ export async function updateBrief(projectId:string,brief:Brief) {
    // Existing evidence sections are rebuilt from supplied evidence, never rewritten by AI.
    for(const page of site.pages){page.sections=page.sections.filter(section=>{
     if(!['team','testimonials','pricing','trustStats','logos'].includes(section.type))return true;
+    if(section.type==='pricing'){
+     section.items=brief.pricing.map((entry,i)=>({title:entry.name,text:site!.business.facts[`pricing-${i}`].value,factRef:`pricing-${i}`,href:site!.pages.some(page=>page.slug==='/contact')?'/contact':'#contact',image:''}));
+     return brief.websiteType==='business';
+    }
     section.items=section.items.filter(item=>site!.business.facts[item.factRef]);
     section.items.forEach(item=>{item.text=site!.business.facts[item.factRef].value;});return section.items.length>0;
    });}

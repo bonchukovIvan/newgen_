@@ -15,6 +15,7 @@ COPY --from=build --chown=node:node /app/.next/static ./.next/static
 COPY --from=build --chown=node:node /app/public ./public
 COPY --from=build --chown=node:node /app/components ./components
 COPY --from=build --chown=node:node /app/lib ./lib
+COPY --from=build --chown=node:node /app/vendor ./vendor
 COPY --from=build --chown=node:node /app/config ./config
 COPY --from=build --chown=node:node /app/scripts ./scripts
 COPY --from=build --chown=node:node /app/prisma ./prisma

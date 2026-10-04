@@ -23,6 +23,7 @@ export function protectFacts(original:Site['business'],candidate:Site['business'
 const restricted=['trustStats','team','testimonials','pricing','logos'];
 export function validateEvidence(section:Section,business:Site['business']) {
  if(restricted.includes(section.type)) {
+  if(section.type==='pricing'&&!section.items.length)return;
   if(!section.items.length)throw new Error(`${section.type} requires supplied facts`);
   for(const item of section.items) {const fact=business.facts[item.factRef];if(!fact||fact.classification==='AI_GENERATED'||item.text!==fact.value||!fact.value.includes(item.title))throw new Error(`${section.type} contains an unsupported claim`);}
  }

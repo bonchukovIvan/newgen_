@@ -9,7 +9,7 @@ import {pageSchema,sectionSchema,seoSchema,themeSchema,Site,SitePage,Section,Bri
 import {sectionRegistry,SectionType,resolveVariant} from '@/lib/templates/registry';
 import {newSection} from '@/lib/templates/starter';
 import {briefForPublication,checkGeneratedCopy} from '@/lib/generation/facts';
-import {createTheme,ensureContrast,readable} from '@/lib/templates/themes';
+import {createTheme,ensureContrast,randomFontPair,readable} from '@/lib/templates/themes';
 import {isRequiredPageSlug} from '@/lib/generation/required-pages';
 import {assertWritingQuality,pageCopy,sectionCopy} from './writing-quality';
 export interface AIProvider {generatePage(site:Site,page:SitePage,brief:Brief,force?:boolean):Promise<SitePage>;generateSection(site:Site,section:Section,brief:Brief,force?:boolean):Promise<Section>;}
@@ -32,7 +32,7 @@ export class OpenAIProvider implements AIProvider {
   if(isMock())return {...site,theme:createTheme(brief.style,brief.dark,brief.primary)};
   const schema=z.object({theme:themeSchema,navigation:z.enum(['inline','centered','split','stacked']),footer:z.enum(['columns','minimal','centered','split','editorial'])});
   const design=await this.structured(schema,prompts.design,{category:brief.category,tone:brief.tone,style:brief.style,primary:brief.primary,dark:brief.dark,language:brief.language,country:brief.country,services:brief.services,pages:site.pages.map(page=>page.title)},force);
-  const theme=ensureContrast(design.theme);
+  const theme=ensureContrast({...design.theme,...randomFontPair()});
   if(theme.primary===theme.background)theme.primary=brief.primary;
   if(theme.primary===theme.background)theme.primary=readable(theme.background)==='#ffffff'?'#6d5dfc':'#4030a0';
   return {...site,theme,navigation:design.navigation,footer:design.footer};
@@ -45,16 +45,21 @@ export class OpenAIProvider implements AIProvider {
   const schema=z.object({strategy:z.string().max(1000),pages:z.array(z.object({title:z.string().max(100),slug:z.string(),objective:z.string().max(400),variants:z.array(z.enum(allowed as [string,...string[]])).min(1).max(15)})).min(1).max(20)});
   const validate=(plan:z.infer<typeof schema>)=>{
    assertWritingQuality([plan.strategy,...plan.pages.flatMap(page=>[page.title,page.objective])],businessPages.flatMap(page=>[page.title,page.objective]));
-   if(plan.pages.length!==businessPages.length||plan.pages[0].slug!=='/'||new Set(plan.pages.map(p=>p.slug)).size!==plan.pages.length||plan.pages.some(p=>isRequiredPageSlug(p.slug)||!/^\/(?:[a-z0-9-]+(?:\/[a-z0-9-]+)*)?$/.test(p.slug)))throw new Error('Return the requested number of unique valid business page routes, beginning with / and excluding the required pages.');
+   if(plan.pages.length!==businessPages.length||plan.pages[0].slug!=='/'||new Set(plan.pages.map(p=>p.slug)).size!==plan.pages.length||plan.pages.some(p=>isRequiredPageSlug(p.slug)||!/^\/(?:[a-z0-9-]+(?:\/[a-z0-9-]+)*)?$/.test(p.slug))||plan.pages.some(p=>!businessPages.some(original=>original.slug===p.slug)))throw new Error('Preserve the requested page routes, beginning with / and excluding the required pages.');
    if(plan.pages.length>1&&!plan.pages.some(p=>p.slug==='/contact'))throw new Error('Multi-page sites require a /contact page.');
    if(plan.pages.length===1&&!plan.pages[0].variants.some(v=>v.startsWith('contact-')))throw new Error('Landing pages need a contact section.');
+   const requiredType=brief.websiteType==='blog'?'blog':'pricing';
+   if(!plan.pages.some(p=>p.variants.some(v=>v.startsWith(requiredType+'-'))))throw new Error(`Include a ${requiredType} section for this website type.`);
+   if(plan.pages.some(p=>p.variants.filter(v=>v.startsWith('blog-')).length>1))throw new Error('Use one articles section per page.');
+   if(brief.websiteType==='blog'&&businessPages.length<=2&&!plan.pages[0].variants.some(v=>v.startsWith('blog-')))throw new Error('Keep the articles section on the homepage.');
+   for(const [slug,type] of [['/blog','blog'],['/pricing','pricing']])if(businessPages.some(p=>p.slug===slug)&&!plan.pages.find(p=>p.slug===slug)?.variants.some(v=>v.startsWith(type+'-')))throw new Error(`Keep the ${type} section on ${slug}.`);
    for(const page of plan.pages)for(const variant of page.variants){const type=resolveVariant(variant).type;if(['testimonials','pricing','team','trustStats','logos'].includes(type)&&!businessPages.some(p=>p.sections.some(s=>s.type===type)))throw new Error(`No supplied evidence is available for ${type}. Omit it.`);}
   };
-  const plan=await this.structured(schema,prompts.planner,{brief:briefForPublication(brief),facts:site.business,requestedPageCount:businessPages.length,approvedComponents:allowed,requirements:'Include a contact form and preserve a /contact route for multiple pages. Select diverse compatible layouts. Do not add evidence-only sections without supplied facts. Privacy Policy, GDPR Policy, Cookie Policy and Business Model are added separately; do not plan them.',sitemap:businessPages.map(p=>({title:p.title,slug:p.slug,objective:p.objective,variants:p.sections.map(s=>s.variant)}))},force,validate);
+  const plan=await this.structured(schema,prompts.planner,{brief:briefForPublication(brief),facts:site.business,requestedPageCount:businessPages.length,approvedComponents:allowed,requirements:`Include a contact form and preserve a /contact route for multiple pages. Keep the ${brief.websiteType==='blog'?'blog section and /blog route when present':'pricing section and /pricing route when present'}; keep article pages and their routes when present. Select diverse compatible layouts. Pricing without supplied amounts must invite a quote and must not invent prices. Do not add other evidence-only sections without supplied facts. Privacy Policy, GDPR Policy, Cookie Policy and Business Model are added separately; do not plan them.`,sitemap:businessPages.map(p=>({title:p.title,slug:p.slug,objective:p.objective,variants:p.sections.map(s=>s.variant)}))},force,validate);
   const templates=businessPages.flatMap(p=>p.sections),slugs=new Set([...plan.pages.map(p=>p.slug),...requiredPages.map(p=>p.slug)]);
   const result={...site,pages:plan.pages.map((p,i)=>{
    const original=businessPages.find(x=>x.slug===p.slug)||businessPages[i];
-   const sections=p.variants.map(variant=>{const type=resolveVariant(variant).type as SectionType;const template=original.sections.find(s=>s.type===type)||templates.find(s=>s.type===type)||newSection(type);return {...structuredClone(template),id:crypto.randomUUID(),type,variant};});
+   const sections=p.variants.map(variant=>{const type=resolveVariant(variant).type as SectionType;const template=original.sections.find(s=>s.type===type)||templates.find(s=>s.type===type)||newSection(type);return {...structuredClone(template),id:p.slug==='/'&&type==='blog'?'blog-0':crypto.randomUUID(),type,variant};});
    if(p.slug==='/contact'&&!sections.some(s=>s.type==='contact'))sections.push({...newSection('contact'),title:'Get in touch'});
    return {...original,id:original.id,slug:p.slug,title:p.title,objective:p.objective,sections};
   }).concat(requiredPages)};
@@ -79,7 +84,7 @@ export class OpenAIProvider implements AIProvider {
   if(isMock())return page;
   const candidate=await this.structured(pageSchema,prompts.writer,{business:site.business,brief:briefForPublication(brief),page,sitemap:site.pages.map(p=>p.slug)},force,candidate=>{if(candidate.sections.length!==page.sections.length)throw new Error('Preserve the section count');candidate.sections.forEach(s=>checkGeneratedCopy(s,site.business));assertWritingQuality(pageCopy(candidate),pageCopy(page));});
   if(candidate.sections.length!==page.sections.length)throw new Error('Writer changed the section structure');
-  const result={...candidate,id:page.id,slug:page.slug,title:page.title,sections:candidate.sections.map((s,i)=>({...s,id:page.sections[i].id,type:page.sections[i].type,variant:page.sections[i].variant,eyebrow:page.sections[i].type==='hero'?'':s.eyebrow,imageId:page.sections[i].imageId,items:['team','testimonials','pricing','trustStats','logos'].includes(s.type)?page.sections[i].items:s.items.map((item,j)=>({...item,image:page.sections[i].items[j]?.image||''}))}))};
+  const result={...candidate,id:page.id,slug:page.slug,title:page.title,sections:candidate.sections.map((s,i)=>({...s,id:page.sections[i].id,type:page.sections[i].type,variant:page.sections[i].variant,eyebrow:page.sections[i].type==='hero'?'':s.eyebrow,imageId:page.sections[i].imageId,items:['team','testimonials','pricing','trustStats','logos','blog'].includes(page.sections[i].type)?page.sections[i].items:s.items.map((item,j)=>({...item,image:page.sections[i].items[j]?.image||''}))}))};
   result.sections.forEach(s=>checkGeneratedCopy(s,site.business));return result;
  }
  async generateSection(site:Site,section:Section,brief:Brief,force=false):Promise<Section> {
@@ -88,7 +93,7 @@ export class OpenAIProvider implements AIProvider {
   if(isMock())return {...section,title:section.title.endsWith(' — made for you')?section.title.replace(' — made for you',''):section.title+' — made for you',body:section.body+' Tell us what you have in mind.'};
   const publicBrief=briefForPublication(brief);
   const candidate=await this.structured(sectionSchema,prompts.section,{business:site.business,brief:publicBrief,section,sitemap:site.pages.map(p=>p.slug)},force,s=>{checkGeneratedCopy(s,site.business);assertWritingQuality(sectionCopy(s),sectionCopy(section));});
-  const result={...candidate,id:section.id,type:section.type,variant:section.variant,eyebrow:section.type==='hero'?'':candidate.eyebrow,imageId:section.imageId,items:['team','testimonials','pricing','trustStats','logos'].includes(section.type)?section.items:candidate.items.map((item,i)=>({...item,image:section.items[i]?.image||''}))};checkGeneratedCopy(result,site.business);return result;
+  const result={...candidate,id:section.id,type:section.type,variant:section.variant,eyebrow:section.type==='hero'?'':candidate.eyebrow,imageId:section.imageId,items:['team','testimonials','pricing','trustStats','logos','blog'].includes(section.type)?section.items:candidate.items.map((item,i)=>({...item,image:section.items[i]?.image||''}))};checkGeneratedCopy(result,site.business);return result;
  }
  async generateSEO(site:Site,force=false):Promise<Site> {
   if(isMock())return site;

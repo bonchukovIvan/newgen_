@@ -4,7 +4,17 @@ function luminance(hex:string) { const c=hex.slice(1).match(/.{2}/g)!.map(v=>par
 export function contrast(a:string,b:string) {const x=luminance(a),y=luminance(b);return(Math.max(x,y)+.05)/(Math.min(x,y)+.05);}
 export function readable(bg:string) {return contrast(bg,'#ffffff')>=4.5?'#ffffff':'#101118';}
 export function ensureContrast(t:Theme):Theme { return {...t,foreground:contrast(t.background,t.foreground)>=4.5?t.foreground:readable(t.background),muted:contrast(t.background,t.muted)>=4.5?t.muted:readable(t.background)}; }
+const fontPairs:Pick<Theme,'headingFont'|'bodyFont'>[]=[
+ {headingFont:'sans',bodyFont:'sans'},
+ {headingFont:'serif',bodyFont:'sans'},
+ {headingFont:'serif',bodyFont:'humanist'},
+ {headingFont:'mono',bodyFont:'sans'},
+ {headingFont:'humanist',bodyFont:'serif'},
+ {headingFont:'display',bodyFont:'sans'},
+ {headingFont:'display',bodyFont:'humanist'},
+];
+export function randomFontPair():Pick<Theme,'headingFont'|'bodyFont'> {return fontPairs[Math.floor(Math.random()*fontPairs.length)];}
 export function createTheme(style:string,dark:boolean,primary:string):Theme {
  const luxury=/Luxury|Beauty|Restaurant|Real Estate/.test(style), angular=/Gaming|Industrial|Tech|Automotive/.test(style);
- return ensureContrast({primary,secondary:dark?'#232436':'#edeaf8',accent:luxury?'#c8a96e':'#9beba2',background:dark?'#101119':'#fbfaf7',foreground:dark?'#f4f3f8':'#191b26',muted:dark?'#b1b1c3':'#5b5b70',headingFont:luxury?'serif':angular?'mono':'sans',bodyFont:'sans',radius:angular?'small':luxury?'none':'large',density:style==='Minimal'?'spacious':'comfortable',shadow:luxury?'none':'soft',buttonStyle:luxury?'outline':'solid',cardStyle:angular?'bordered':'filled',scale:luxury||angular?'dramatic':'balanced'});
+ return ensureContrast({primary,secondary:dark?'#232436':'#edeaf8',accent:luxury?'#c8a96e':'#9beba2',background:dark?'#101119':'#fbfaf7',foreground:dark?'#f4f3f8':'#191b26',muted:dark?'#b1b1c3':'#5b5b70',...randomFontPair(),radius:angular?'small':luxury?'none':'large',density:style==='Minimal'?'spacious':'comfortable',shadow:luxury?'none':'soft',buttonStyle:luxury?'outline':'solid',cardStyle:angular?'bordered':'filled',scale:luxury||angular?'dramatic':'balanced'});
 }
