@@ -13,7 +13,7 @@ export function businessFromBrief(b:Brief):Site['business'] {
  }
  b.testimonials.forEach((x,i)=>facts[`testimonial-${i}`]={value:`${x.quote} — ${x.name}`,source:'business owner',classification:'USER_PROVIDED'});
  b.team.forEach((x,i)=>facts[`team-${i}`]={value:`${x.name} — ${x.role}`,source:'business owner',classification:'USER_PROVIDED'});
- b.pricing.forEach((x,i)=>facts[`pricing-${i}`]={value:`${x.name}: ${x.price}. ${x.description}`,source:'business owner',classification:'USER_PROVIDED'});
+ b.pricing.forEach((x,i)=>facts[`pricing-${i}`]={value:`${x.suggested?'Suggested price — ':''}${x.name}: ${x.price}. ${x.description}`,source:x.suggested?'AI suggested price':'business owner',classification:x.suggested?'AI_GENERATED':'USER_PROVIDED'});
  return {name:b.name,category:b.category,city:b.city,country:b.country,facts};
 }
 export function briefForPublication(b:Brief):Brief{const facts={...b.facts};delete facts.googleContactName;delete facts.generatedContactSample;if(!b.addressVerified){delete facts.address;delete facts.latitude;delete facts.longitude;}if(!b.phoneVerified)delete facts.phone;return {...b,address:b.addressVerified?b.address:'',phone:b.phoneVerified?b.phone:'',email:b.emailVerified&&!/\.example$/i.test(b.email)?b.email:'',placeId:b.addressVerified?b.placeId:'',placeUrl:b.addressVerified?b.placeUrl:'',facts};}
@@ -25,7 +25,7 @@ export function validateEvidence(section:Section,business:Site['business']) {
  if(restricted.includes(section.type)) {
   if(section.type==='pricing'&&!section.items.length)return;
   if(!section.items.length)throw new Error(`${section.type} requires supplied facts`);
-  for(const item of section.items) {const fact=business.facts[item.factRef];if(!fact||fact.classification==='AI_GENERATED'||item.text!==fact.value||!fact.value.includes(item.title))throw new Error(`${section.type} contains an unsupported claim`);}
+  for(const item of section.items) {const fact=business.facts[item.factRef];const allowedProposal=section.type==='pricing'&&fact?.source==='AI suggested price';if(!fact||(fact.classification==='AI_GENERATED'&&!allowedProposal)||item.text!==fact.value||!fact.value.includes(item.title))throw new Error(`${section.type} contains an unsupported claim`);}
  }
 }
 export function checkGeneratedCopy(section:Section,business:Site['business']) {

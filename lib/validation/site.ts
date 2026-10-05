@@ -17,9 +17,9 @@ export const briefSchema = z.object({
   facts: z.record(z.string().max(80),z.string().max(3000)).default({}),
   testimonials: z.array(z.object({name:z.string().max(120),quote:text})).max(20).default([]),
   team: z.array(z.object({name:z.string().max(120),role:z.string().max(200)})).max(30).default([]),
-  pricing: z.array(z.object({name:z.string().max(120),price:z.string().max(100),description:text})).max(30).default([]),
+  pricing: z.array(z.object({name:z.string().max(120),price:z.string().max(100),description:text,suggested:z.boolean().optional()})).max(30).default([]),
 }).strict();
-export const newProjectSchema=briefSchema.omit({name:true,city:true,address:true,placeId:true,placeUrl:true,description:true,services:true,tone:true,phone:true,email:true,style:true,primary:true,dark:true,instructions:true,autoGenerate:true,addressVerified:true,phoneVerified:true,emailVerified:true});
+export const newProjectSchema=briefSchema.omit({name:true,city:true,address:true,placeId:true,placeUrl:true,description:true,services:true,tone:true,phone:true,email:true,style:true,primary:true,dark:true,instructions:true,autoGenerate:true,addressVerified:true,phoneVerified:true,emailVerified:true,pricing:true});
 export function effectivePageCount(size:z.infer<typeof briefSchema>['size'],pageCount:number):number{return size==='Landing page'?1:size==='Small site'?3:size==='Large'?Math.max(8,pageCount):pageCount;}
 export const themeSchema = z.object({ primary:z.string().regex(/^#[0-9a-fA-F]{6}$/), secondary:z.string().regex(/^#[0-9a-fA-F]{6}$/), accent:z.string().regex(/^#[0-9a-fA-F]{6}$/), background:z.string().regex(/^#[0-9a-fA-F]{6}$/), foreground:z.string().regex(/^#[0-9a-fA-F]{6}$/), muted:z.string().regex(/^#[0-9a-fA-F]{6}$/), headingFont:z.enum(['sans','serif','mono','humanist','display']), bodyFont:z.enum(['sans','serif','humanist']), radius:z.enum(['none','small','medium','large']), density:z.enum(['compact','comfortable','spacious']), shadow:z.enum(['none','soft','bold']), buttonStyle:z.enum(['solid','outline','pill']), cardStyle:z.enum(['bordered','filled','plain']), scale:z.enum(['compact','balanced','dramatic']) }).strict();
 export const itemSchema = z.object({ title:z.string().max(200), text, image:z.string().max(300).default(''), href:z.union([safeLink,z.literal('')]).default(''), factRef:z.string().max(100).default('') }).strict();

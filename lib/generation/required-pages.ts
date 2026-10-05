@@ -8,6 +8,7 @@ export const requiredPageSpecs=[
 ] as const;
 export type RequiredPageSlug=typeof requiredPageSpecs[number]['slug'];
 export function isRequiredPageSlug(slug:string):slug is RequiredPageSlug{return requiredPageSpecs.some(page=>page.slug===slug);}
+export function revenueModelText(brief:Brief):string {return brief.pricing.length?`Proposed revenue comes from these draft offers: ${brief.pricing.map(entry=>`${entry.name} at ${entry.price}`).join('; ')}. These amounts are suggestions, not confirmed business prices. The owner must confirm pricing, costs, staff, partners, and delivery capacity before publication.`:'Possible revenue comes from the services the owner chooses to sell. Pricing, costs, staff, partners, and delivery capacity require owner confirmation.';}
 
 function fallbackItems(slug:RequiredPageSlug,brief:Brief):{title:string;text:string}[]{
  switch(slug){
@@ -26,17 +27,17 @@ function fallbackItems(slug:RequiredPageSlug,brief:Brief):{title:string;text:str
    {title:'Complaints and changes',text:'Visitors may be able to complain to a relevant data protection authority. The business should identify the authority and update this notice when its processing changes.'},
   ];
   case '/cookie-policy':return [
-   {title:'Current default website',text:'The default exported website contains no analytics, advertising, or third-party tracking scripts. Node.js and PHP exports include a contact form; static HTML requires an external form service.'},
-   {title:'Cookies and similar storage',text:'The default exported website does not set cookies through its included code. Hosting services or later integrations may introduce cookies or similar technologies.'},
-   {title:'Changes to the website',text:'If analytics, advertising, embedded media, or other tools are added, the business must audit the resulting cookies and update this policy.'},
-   {title:'Visitor choices',text:'Where non-essential cookies are introduced, the business may need to provide clear information and obtain consent before they are used.'},
+   {title:'This website',text:`${brief.name} includes a cookie notice and no analytics, advertising, or third-party tracking scripts by default. Node.js and PHP exports include a contact form; static HTML requires an external form service.`},
+   {title:'Notice preference',text:`When you close the cookie notice, ${brief.name} saves that choice in your browser's local storage, if available, so the notice stays closed on this site. This is not a cookie. Clear this site's browser storage to show the notice again.`},
+   {title:'Cookies and other services',text:'The included website code does not set cookies. Hosting services or later additions such as analytics, advertising, or embedded media may do so. The business must audit those services and update this policy before using them.'},
+   {title:'Visitor choices',text:'The notice does not turn tracking on or off because no non-essential tracking is included by default. If that changes, the business must review whether consent controls are required before those tools run.'},
   ];
   case '/business-model':return [
    {title:'Value proposition',text:`Proposed focus: ${brief.description||`${brief.category} services`} for people in ${brief.city}, ${brief.country}. The owner should refine this positioning.`},
    {title:'Potential customers',text:`The draft audience includes people looking for ${brief.category.toLowerCase()} and related services in the area. Confirm the target customer segments.`},
    {title:'Services',text:`The proposed offer includes ${brief.services.join(', ')}. Keep only services the business actually provides.`},
    {title:'Customer journey',text:'Visitors can review the website and, where a contact form is enabled, send an enquiry. The business should define how enquiries become confirmed work or bookings.'},
-   {title:'Revenue and operations',text:'Possible revenue comes from the services the owner chooses to sell. Pricing, costs, staff, partners, and delivery capacity require owner confirmation.'},
+   {title:'Revenue and operations',text:revenueModelText(brief)},
   ];
  }
 }

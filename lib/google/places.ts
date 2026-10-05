@@ -2,14 +2,14 @@ import {track} from '@/lib/usage';
 import type {Brief} from '@/lib/validation/site';
 export interface PlaceResult {id:string;displayName?:{text:string};formattedAddress?:string;nationalPhoneNumber?:string;websiteUri?:string;googleMapsUri?:string;location?:{latitude:number;longitude:number};regularOpeningHours?:{weekdayDescriptions:string[]};rating?:number;userRatingCount?:number;photos?:{name:string;authorAttributions?:{displayName:string;uri:string}[]}[];}
 export interface SuggestedPlace {name:string;address:string;city:string;country:string;phone:string;}
-interface AddressCandidate {displayName?:{text:string};formattedAddress?:string;internationalPhoneNumber?:string;nationalPhoneNumber?:string;addressComponents?:{longText:string;types:string[]}[];}
+interface AddressCandidate {id?:string;displayName?:{text:string};formattedAddress?:string;internationalPhoneNumber?:string;nationalPhoneNumber?:string;addressComponents?:{longText?:string;types?:string[]}[];}
 export function matchingPlaceName(actual:string,expected:string):boolean {
  const normalize=(value:string)=>value.normalize('NFKD').toLocaleLowerCase().replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,'');
  return !!normalize(expected)&&normalize(actual)===normalize(expected);
 }
 export function chooseSuggestedPlace(places:AddressCandidate[],country:string,requirePhone=false):SuggestedPlace|null {
  const matches=places.map(place=>{
-  const part=(type:string)=>place.addressComponents?.find(component=>component.types.includes(type))?.longText||'';
+  const part=(type:string)=>place.addressComponents?.find(component=>component.types?.includes(type))?.longText||'';
   return {name:place.displayName?.text||'',address:place.formattedAddress||'',city:part('locality')||part('postal_town')||part('administrative_area_level_2')||part('administrative_area_level_1'),country:part('country'),phone:place.internationalPhoneNumber||place.nationalPhoneNumber||''};
  }).filter(place=>place.address&&place.city&&place.country.toLocaleLowerCase()===country.trim().toLocaleLowerCase()&&(!requirePhone||!!place.phone));
  return matches.length?matches[Math.floor(Math.random()*matches.length)]:null;
@@ -27,11 +27,29 @@ export async function suggestBusinessAddress(name:string,city:string,country:str
 }
 export async function suggestRandomBusinessContact(category:string,country:string,projectId:string):Promise<SuggestedPlace|null> {
  if(!process.env.GOOGLE_PLACES_API_KEY)return null;
- const response=await fetch('https://places.googleapis.com/v1/places:searchText',{method:'POST',headers:{'X-Goog-Api-Key':process.env.GOOGLE_PLACES_API_KEY,'Content-Type':'application/json','X-Goog-FieldMask':'places.displayName,places.formattedAddress,places.addressComponents,places.internationalPhoneNumber,places.nationalPhoneNumber'},body:JSON.stringify({textQuery:`${category} in ${country}`,pageSize:20}),signal:AbortSignal.timeout(15000)});
- await track(projectId,'google-places','contact-suggestion');
- if(!response.ok)throw new Error(`Google Places returned ${response.status}`);
- const data=await response.json() as {places?:AddressCandidate[]};
- return chooseSuggestedPlace(data.places||[],country,true);
+ const queries=[`${category} in ${country}`,`businesses in ${country}`,`shops in ${country}`];
+ const candidates:AddressCandidate[]=[];
+ for(const textQuery of queries){
+  const response=await fetch('https://places.googleapis.com/v1/places:searchText',{method:'POST',headers:{'X-Goog-Api-Key':process.env.GOOGLE_PLACES_API_KEY,'Content-Type':'application/json','X-Goog-FieldMask':'places.id,places.displayName,places.formattedAddress,places.addressComponents,places.internationalPhoneNumber,places.nationalPhoneNumber'},body:JSON.stringify({textQuery,pageSize:20}),signal:AbortSignal.timeout(15000)});
+  await track(projectId,'google-places','contact-suggestion');
+  if(!response.ok)throw new Error(`Google Places returned ${response.status}`);
+  const data=await response.json() as {places?:AddressCandidate[]};
+  candidates.push(...(data.places||[]));
+  const selected=chooseSuggestedPlace(data.places||[],country,true);
+  if(selected)return selected;
+ }
+ // Some search results omit contact fields. Resolve a few randomly chosen places
+ // individually, keeping the phone and address from the same Google venue.
+ const shuffled=[...new Map(candidates.filter(place=>place.id).map(place=>[place.id,place])).values()];
+ for(let i=shuffled.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[shuffled[i],shuffled[j]]=[shuffled[j],shuffled[i]];}
+ for(const candidate of shuffled.slice(0,8)){
+  const response=await fetch(`https://places.googleapis.com/v1/places/${encodeURIComponent(candidate.id!)}`,{headers:{'X-Goog-Api-Key':process.env.GOOGLE_PLACES_API_KEY,'X-Goog-FieldMask':'displayName,formattedAddress,addressComponents,internationalPhoneNumber,nationalPhoneNumber'},signal:AbortSignal.timeout(15000)});
+  await track(projectId,'google-places','contact-suggestion-detail');
+  if(!response.ok)continue;
+  const selected=chooseSuggestedPlace([await response.json() as AddressCandidate],country,true);
+  if(selected)return selected;
+ }
+ return null;
 }
 export async function lookupPlace(brief:Brief,projectId:string):Promise<PlaceResult|null> {
  if(!process.env.GOOGLE_PLACES_API_KEY)return null;

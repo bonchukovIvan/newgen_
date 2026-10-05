@@ -8,7 +8,9 @@ import {briefForPublication,enforceSite,protectFacts} from './facts';
 import {isMock} from '@/lib/env';
 import {pruneProjectAssets} from '@/lib/images/cleanup';
 import {generateBusinessIdentity} from './identity';
+import {suggestPricing} from './pricing';
 import {readable} from '@/lib/templates/themes';
+import {suggestedBusinessEmail,siteOrigin} from './domain';
 export const stages=['Reading business brief','Checking business information','Planning website strategy','Building sitemap','Creating design system','Composing pages','Writing page copy','Preparing image directions','Creating image library','Writing search metadata','Preparing structured data','Validating website','Saving website','Ready to preview'];
 export async function runStage(projectId:string,stage:number,site:Site,brief:Brief,force=false):Promise<Site> {
  const ai=new OpenAIProvider(projectId);
@@ -58,9 +60,15 @@ export async function processJob(jobId:string,owner:string) {
    const generated=await generateBusinessIdentity(brief,job.projectId);brief=generated.brief;identityWarnings=generated.warnings;
    await db.project.update({where:{id:job.projectId},data:{name:brief.name,brief:json(brief)}});
   }
+  if(payload.scope==='site'&&brief.websiteType==='business'&&!brief.pricing.length){
+   brief=briefSchema.parse({...brief,pricing:await suggestPricing(brief,job.projectId)});
+   await db.project.update({where:{id:job.projectId},data:{brief:json(brief)}});
+  }
   let site=job.result?siteSchema.parse(job.result):payload.scope==='site'?starterSite(brief,job.project.version):siteSchema.parse(job.project.site);
   site.warnings.push(...identityWarnings);
-  if(payload.scope==='site'&&job.project.site){const previous=siteSchema.parse(job.project.site);site.business=protectFacts(previous.business,site.business);site.domain=previous.domain;if(!job.result)site.assets=previous.assets.filter(asset=>asset.provider==='upload');}
+  if(payload.scope==='site'&&job.project.site){const previous=siteSchema.parse(job.project.site);site.business=protectFacts(previous.business,site.business);site.domain=siteOrigin(previous.domain)||site.domain;if(!job.result)site.assets=previous.assets.filter(asset=>asset.provider==='upload');
+   if(brief.autoGenerate&&!brief.emailVerified&&site.domain&&(brief.email===suggestedBusinessEmail(brief.name)||/\.example$/i.test(brief.email))){const email=suggestedBusinessEmail(brief.name,site.domain);brief=briefSchema.parse({...brief,email});if(site.business.facts.email?.classification==='AI_GENERATED')site.business.facts.email={...site.business.facts.email,value:email,source:'Draft suggested mailbox'};await db.project.update({where:{id:job.projectId},data:{brief:json(brief)}});}
+  }
   if(payload.scope==='site')for(let stage=job.stage;stage<stages.length;stage++){
    await db.generationJob.updateMany({where:{id:jobId,leaseOwner:owner},data:{stage,progress:Math.round(stage/stages.length*100)}});
    await db.generationLog.create({data:{jobId,stage,message:stages[stage]}});

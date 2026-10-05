@@ -1,5 +1,19 @@
 import type {Site,SitePage} from '@/lib/validation/site';
-export const languageCode=(language:string)=>({English:'en',French:'fr',German:'de',Spanish:'es',Italian:'it',Portuguese:'pt',Ukrainian:'uk',Polish:'pl',Dutch:'nl',Japanese:'ja',Arabic:'ar'}[language]||(/^[a-z]{2}(?:-[A-Z]{2})?$/.test(language)?language:'und'));
+const languageNames:Record<string,string>={English:'en',French:'fr',German:'de',Spanish:'es',Italian:'it',Portuguese:'pt',Ukrainian:'uk',Polish:'pl',Dutch:'nl',Japanese:'ja',Arabic:'ar'};
+const regionNames=new Intl.DisplayNames(['en'],{type:'region'});
+const countryAliases:Record<string,string>={uk:'GB','united kingdom':'GB',usa:'US','u.s.':'US','u.s.a.':'US','united states of america':'US'};
+const regions=new Map<string,string>();
+for(let first=65;first<=90;first++)for(let second=65;second<=90;second++){
+ const code=String.fromCharCode(first,second),name=regionNames.of(code);
+ if(name&&name!==code)regions.set(name.toLowerCase(),code);
+}
+export function languageCode(language:string,country=''){
+ const normalized=language.trim();
+ const code=languageNames[normalized]||(/^[a-z]{2}(?:-[a-z]{2})?$/i.test(normalized)?normalized.replace(/^([a-z]{2})(?:-([a-z]{2}))?$/i,(_,lang:string,region:string|undefined)=>lang.toLowerCase()+(region?'-'+region.toUpperCase():'')):'und');
+ const place=country.trim().toLowerCase();
+ const region=countryAliases[place]||regions.get(place)||(/^[a-z]{2}$/i.test(place)&&regionNames.of(place.toUpperCase())!==place.toUpperCase()?place.toUpperCase():'');
+ return region&&code!=='und'?code.split('-')[0]+'-'+region:code;
+}
 export function metadataFor(site:Site,page:SitePage,base:string) {const canonical=base.replace(/\/$/,'')+page.slug;const favicon=site.assets.find(asset=>asset.id===site.faviconId);return {title:page.seo.title,description:page.seo.description,alternates:{canonical},icons:favicon?{icon:[{url:favicon.url,type:'image/webp'}]}:undefined,openGraph:{title:page.seo.ogTitle||page.seo.title,description:page.seo.ogDescription||page.seo.description,url:canonical,type:'website' as const,siteName:site.business.name},twitter:{card:'summary_large_image' as const,title:page.seo.title,description:page.seo.description}};}
 export function structuredData(site:Site,page:SitePage,base:string) {
  const facts=site.business.facts,verified=(key:string)=>facts[key]&&facts[key].classification!=='AI_GENERATED'?facts[key].value:undefined;
